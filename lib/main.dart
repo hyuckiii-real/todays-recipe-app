@@ -46,18 +46,15 @@ class _MainShellState extends State<MainShell> {
       'https://raw.githubusercontent.com/hyuckiii-real/todays-recipe-data/main/today.json';
 
   int _selectedIndex = 0;
-  Map<String, dynamic>? _recipe;
+  Map _recipe = {};
+  bool _hasRecipe = false;
   bool _isLoading = true;
-  String? _errorMessage;
+  String _errorMessage = '';
 
-  // 장보기 체크 상태 & 대체 재료 펼침 상태
-  final Set<int> _checkedIngredients = {};
-  final Set<int> _expandedSubstitutes = {};
+  final Set _checkedIngredients = {};
+  final Set _expandedSubstitutes = {};
+  List _diaryList = [];
 
-  // 식탁 일기 (완료 히스토리)
-  var _diaryList = >[];
-
-  // AdMob 배너
   BannerAd? _bannerAd;
   bool _isBannerReady = false;
 
@@ -68,7 +65,7 @@ class _MainShellState extends State<MainShell> {
     _initAdMobInBackground();
   }
 
-  Future<void> _initAdMobInBackground() async {
+  Future _initAdMobInBackground() async {
     try {
       await Future.delayed(const Duration(seconds: 2));
       await MobileAds.instance.initialize();
@@ -95,28 +92,26 @@ class _MainShellState extends State<MainShell> {
     } catch (_) {}
   }
 
-  Future<void> _loadCachedAndFetch() async {
+  Future _loadCachedAndFetch() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // 일기 목록 복원
     final diaryRaw = prefs.getString('recipe_diary_list');
     if (diaryRaw != null) {
       try {
-        final decoded = jsonDecode(diaryRaw) as List;
-        _diaryList = decoded.cast>();
+        _diaryList = jsonDecode(diaryRaw) as List;
       } catch (_) {}
     }
 
-    // 캐시된 레시피 즉시 표시
     final cachedRecipeRaw = prefs.getString('cached_today_recipe');
     if (cachedRecipeRaw != null) {
       try {
-        final decoded = jsonDecode(cachedRecipeRaw) as Map<String, dynamic>;
+        final decoded = jsonDecode(cachedRecipeRaw) as Map;
         final savedChecked =
             prefs.getStringList('checked_${decoded['date']}') ?? [];
         if (mounted) {
           setState(() {
             _recipe = decoded;
+            _hasRecipe = true;
             _checkedIngredients
               ..clear()
               ..addAll(savedChecked.map(int.parse));
@@ -126,7 +121,6 @@ class _MainShellState extends State<MainShell> {
       } catch (_) {}
     }
 
-    // 최신 데이터 네트워크 조회
     try {
       http.Response res = await http
           .get(Uri.parse('$_dataUrl?t=${DateTime.now().millisecondsSinceEpoch}'))
@@ -137,29 +131,29 @@ class _MainShellState extends State<MainShell> {
             .timeout(const Duration(seconds: 8));
       }
       if (res.statusCode == 200) {
-        final decoded =
-            jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+        final decoded = jsonDecode(utf8.decode(res.bodyBytes)) as Map;
         await prefs.setString('cached_today_recipe', jsonEncode(decoded));
         final savedChecked =
             prefs.getStringList('checked_${decoded['date']}') ?? [];
         if (mounted) {
           setState(() {
             _recipe = decoded;
+            _hasRecipe = true;
             _checkedIngredients
               ..clear()
               ..addAll(savedChecked.map(int.parse));
             _isLoading = false;
-            _errorMessage = null;
+            _errorMessage = '';
           });
         }
-      } else if (_recipe == null && mounted) {
+      } else if (!_hasRecipe && mounted) {
         setState(() {
           _isLoading = false;
           _errorMessage = '오늘의 요리를 불러오지 못했어요. (${res.statusCode})';
         });
       }
     } catch (e) {
-      if (_recipe == null && mounted) {
+      if (!_hasRecipe && mounted) {
         setState(() {
           _isLoading = false;
           _errorMessage = '인터넷 연결을 확인한 뒤 다시 시도해 주세요.';
@@ -168,7 +162,7 @@ class _MainShellState extends State<MainShell> {
     }
   }
 
-  Future<void> _toggleIngredient(int index) async {
+  Future _toggleIngredient(int index) async {
     setState(() {
       if (_checkedIngredients.contains(index)) {
         _checkedIngredients.remove(index);
@@ -176,22 +170,22 @@ class _MainShellState extends State<MainShell> {
         _checkedIngredients.add(index);
       }
     });
-    if (_recipe != null) {
+    if (_hasRecipe) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(
-        'checked_${_recipe!['date']}',
+        'checked_${_recipe['date']}',
         _checkedIngredients.map((e) => e.toString()).toList(),
       );
     }
   }
 
-  Future<void> _completeTodayCooking(String note, String ratingEmoji) async {
-    if (_recipe == null) return;
+  Future _completeTodayCooking(String note, String ratingEmoji) async {
+    if (!_hasRecipe) return;
     final prefs = await SharedPreferences.getInstance();
     final entry = {
-      'date': _recipe!['date'] ?? '',
-      'menu_name': _recipe!['menu_name'] ?? '',
-      'emoji': _recipe!['emoji'] ?? '🍳',
+      'date': _recipe['date'] ?? '',
+      'menu_name': _recipe['menu_name'] ?? '',
+      'emoji': _recipe['emoji'] ?? '🍳',
       'rating': ratingEmoji,
       'note': note.trim().isEmpty ? '오늘도 직접 해먹기 성공!' : note.trim(),
     };
@@ -227,7 +221,7 @@ class _MainShellState extends State<MainShell> {
               ),
             ),
             const Spacer(),
-            if (_recipe != null)
+            if (_hasRecipe)
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -236,7 +230,7 @@ class _MainShellState extends State<MainShell> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  _recipe!['date'] ?? '',
+                  '${_recipe['date'] ?? ''}',
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -309,14 +303,17 @@ class _MainShellState extends State<MainShell> {
         ),
       );
     }
-    if (_errorMessage != null || _recipe == null) {
+    if (_errorMessage.isNotEmpty || !_hasRecipe) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(_errorMessage ?? '데이터가 없습니다.', textAlign: TextAlign.center),
+              Text(
+                _errorMessage.isNotEmpty ? _errorMessage : '데이터가 없습니다.',
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: () {
@@ -345,9 +342,8 @@ class _MainShellState extends State<MainShell> {
     }
   }
 
-  // 1번 탭: 오늘의 요리 소개
   Widget _buildOverviewTab() {
-    final r = _recipe!;
+    final r = _recipe;
     final isAlreadyDone = _diaryList.any((item) => item['date'] == r['date']);
     final ingredientsList = (r['ingredients'] as List?) ?? [];
     return SingleChildScrollView(
@@ -380,7 +376,7 @@ class _MainShellState extends State<MainShell> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    r['theme_badge'] ?? '오늘의 추천',
+                    '${r['theme_badge'] ?? '오늘의 추천'}',
                     style: const TextStyle(
                       color: Color(0xFFD95B26),
                       fontWeight: FontWeight.w700,
@@ -391,12 +387,12 @@ class _MainShellState extends State<MainShell> {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    Text(r['emoji'] ?? '🍳',
+                    Text('${r['emoji'] ?? '🍳'}',
                         style: const TextStyle(fontSize: 44)),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Text(
-                        r['menu_name'] ?? '',
+                        '${r['menu_name'] ?? ''}',
                         style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w900,
@@ -412,8 +408,8 @@ class _MainShellState extends State<MainShell> {
                   children: [
                     _infoChip(Icons.schedule, '약 ${r['cook_time_minutes']}분'),
                     const SizedBox(width: 10),
-                    _infoChip(
-                        Icons.thumb_up_alt_outlined, r['difficulty'] ?? '쉬움'),
+                    _infoChip(Icons.thumb_up_alt_outlined,
+                        '${r['difficulty'] ?? '쉬움'}'),
                     const SizedBox(width: 10),
                     _infoChip(Icons.kitchen_outlined,
                         '재료 ${ingredientsList.length}가지'),
@@ -433,7 +429,7 @@ class _MainShellState extends State<MainShell> {
                       const Text('💬 ', style: TextStyle(fontSize: 18)),
                       Expanded(
                         child: Text(
-                          r['friend_message'] ?? '',
+                          '${r['friend_message'] ?? ''}',
                           style: const TextStyle(
                             fontSize: 15,
                             height: 1.5,
@@ -477,7 +473,7 @@ class _MainShellState extends State<MainShell> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  r['today_mission'] ?? '',
+                  '${r['today_mission'] ?? ''}',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 15,
@@ -536,10 +532,8 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  // 2번 탭: 10분 장보기 & 대체 재료
   Widget _buildShoppingTab() {
-    final ingredients =
-        (_recipe!['ingredients'] as List).cast>();
+    final ingredients = (_recipe['ingredients'] as List?) ?? [];
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -556,7 +550,7 @@ class _MainShellState extends State<MainShell> {
           ),
           const SizedBox(height: 18),
           ...List.generate(ingredients.length, (i) {
-            final item = ingredients[i];
+            final item = ingredients[i] as Map;
             final checked = _checkedIngredients.contains(i);
             final showSub = _expandedSubstitutes.contains(i);
             final isBuy = item['category'] == '장보기 재료';
@@ -589,7 +583,7 @@ class _MainShellState extends State<MainShell> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                item['category'] ?? '',
+                                '${item['category'] ?? ''}',
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
@@ -600,7 +594,7 @@ class _MainShellState extends State<MainShell> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                item['name'] ?? '',
+                                '${item['name'] ?? ''}',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,
@@ -684,16 +678,15 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  // 3번 탭: 큰 글씨 요리 모드 + 내장 타이머 + 완료 인증
   Widget _buildCookingTab() {
-    final steps = (_recipe!['steps'] as List).cast>();
+    final steps = (_recipe['steps'] as List?) ?? [];
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${_recipe!['emoji'] ?? '🍳'} ${_recipe!['menu_name'] ?? ''}',
+            '${_recipe['emoji'] ?? '🍳'} ${_recipe['menu_name'] ?? ''}',
             style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 6),
@@ -702,7 +695,7 @@ class _MainShellState extends State<MainShell> {
             style: TextStyle(fontSize: 14, color: Color(0xFF6E5D52)),
           ),
           const SizedBox(height: 18),
-          ...steps.map((step) => _StepCardWidget(step: step)),
+          ...steps.map((step) => _StepCardWidget(step: step as Map)),
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
@@ -784,7 +777,6 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  // 4번 탭: 나만의 식탁 일기
   Widget _buildDiaryTab() {
     if (_diaryList.isEmpty) {
       return const Center(
@@ -815,7 +807,7 @@ class _MainShellState extends State<MainShell> {
       padding: const EdgeInsets.all(20),
       itemCount: _diaryList.length,
       itemBuilder: (context, idx) {
-        final item = _diaryList[idx];
+        final item = _diaryList[idx] as Map;
         return Container(
           margin: const EdgeInsets.only(bottom: 14),
           padding: const EdgeInsets.all(18),
@@ -829,7 +821,7 @@ class _MainShellState extends State<MainShell> {
             children: [
               Row(
                 children: [
-                  Text(item['emoji'] ?? '🍳',
+                  Text('${item['emoji'] ?? '🍳'}',
                       style: const TextStyle(fontSize: 28)),
                   const SizedBox(width: 10),
                   Expanded(
@@ -837,12 +829,12 @@ class _MainShellState extends State<MainShell> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          item['menu_name'] ?? '',
+                          '${item['menu_name'] ?? ''}',
                           style: const TextStyle(
                               fontSize: 17, fontWeight: FontWeight.w800),
                         ),
                         Text(
-                          item['date'] ?? '',
+                          '${item['date'] ?? ''}',
                           style: const TextStyle(
                               fontSize: 12, color: Color(0xFF8C7A6B)),
                         ),
@@ -857,7 +849,7 @@ class _MainShellState extends State<MainShell> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      item['rating'] ?? '',
+                      '${item['rating'] ?? ''}',
                       style: const TextStyle(
                           fontSize: 12, fontWeight: FontWeight.bold),
                     ),
@@ -866,7 +858,7 @@ class _MainShellState extends State<MainShell> {
               ),
               const SizedBox(height: 10),
               Text(
-                item['note'] ?? '',
+                '${item['note'] ?? ''}',
                 style: const TextStyle(
                     fontSize: 14.5, color: Color(0xFF4A3B32), height: 1.4),
               ),
@@ -879,7 +871,7 @@ class _MainShellState extends State<MainShell> {
 }
 
 class _StepCardWidget extends StatefulWidget {
-  final Map<String, dynamic> step;
+  final Map step;
   const _StepCardWidget({required this.step});
 
   @override
@@ -888,7 +880,7 @@ class _StepCardWidget extends StatefulWidget {
 
 class _StepCardWidgetState extends State<_StepCardWidget> {
   Timer? _timer;
-  late int _remainingSeconds;
+  int _remainingSeconds = 0;
   bool _isRunning = false;
 
   @override
@@ -973,7 +965,7 @@ class _StepCardWidgetState extends State<_StepCardWidget> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  widget.step['title'] ?? '',
+                  '${widget.step['title'] ?? ''}',
                   style: const TextStyle(
                       fontSize: 18, fontWeight: FontWeight.w800),
                 ),
@@ -982,7 +974,7 @@ class _StepCardWidgetState extends State<_StepCardWidget> {
           ),
           const SizedBox(height: 12),
           Text(
-            widget.step['instruction'] ?? '',
+            '${widget.step['instruction'] ?? ''}',
             style: const TextStyle(
               fontSize: 17,
               height: 1.55,
