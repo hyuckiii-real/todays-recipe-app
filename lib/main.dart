@@ -55,7 +55,7 @@ class _MainShellState extends State<MainShell> {
   final Set<int> _expandedSubstitutes = {};
 
   // 식탁 일기 (완료 히스토리)
-  List> _diaryList = [];
+  var _diaryList = >[];
 
   // AdMob 배너
   BannerAd? _bannerAd;
