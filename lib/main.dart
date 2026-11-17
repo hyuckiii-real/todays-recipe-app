@@ -266,12 +266,14 @@ class _MainShellState extends State<MainShell> {
             destinations: const [
               NavigationDestination(
                 icon: Icon(Icons.restaurant_menu_outlined),
-                selectedIcon: Icon(Icons.restaurant_menu, color: Color(0xFFE86F3A)),
+                selectedIcon:
+                    Icon(Icons.restaurant_menu, color: Color(0xFFE86F3A)),
                 label: '오늘의 요리',
               ),
               NavigationDestination(
                 icon: Icon(Icons.shopping_basket_outlined),
-                selectedIcon: Icon(Icons.shopping_basket, color: Color(0xFFE86F3A)),
+                selectedIcon:
+                    Icon(Icons.shopping_basket, color: Color(0xFFE86F3A)),
                 label: '10분 장보기',
               ),
               NavigationDestination(
@@ -347,6 +349,7 @@ class _MainShellState extends State<MainShell> {
   Widget _buildOverviewTab() {
     final r = _recipe!;
     final isAlreadyDone = _diaryList.any((item) => item['date'] == r['date']);
+    final ingredientsList = (r['ingredients'] as List?) ?? [];
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -409,10 +412,11 @@ class _MainShellState extends State<MainShell> {
                   children: [
                     _infoChip(Icons.schedule, '약 ${r['cook_time_minutes']}분'),
                     const SizedBox(width: 10),
-                    _infoChip(Icons.thumb_up_alt_outlined, r['difficulty'] ?? '쉬움'),
+                    _infoChip(
+                        Icons.thumb_up_alt_outlined, r['difficulty'] ?? '쉬움'),
                     const SizedBox(width: 10),
                     _infoChip(Icons.kitchen_outlined,
-                        '재료 ${(r['ingredients'] as List).length}가지'),
+                        '재료 ${ingredientsList.length}가지'),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -534,7 +538,8 @@ class _MainShellState extends State<MainShell> {
 
   // 2번 탭: 10분 장보기 & 대체 재료
   Widget _buildShoppingTab() {
-    final ingredients = (_recipe!['ingredients'] as List).cast>();
+    final ingredients =
+        (_recipe!['ingredients'] as List).cast>();
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -635,7 +640,8 @@ class _MainShellState extends State<MainShell> {
                   if (showSub)
                     Container(
                       width: double.infinity,
-                      margin: const EdgeInsets.only(top: 8, left: 12, right: 8),
+                      margin:
+                          const EdgeInsets.only(top: 8, left: 12, right: 8),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: const Color(0xFFFFF7F0),
@@ -844,8 +850,8 @@ class _MainShellState extends State<MainShell> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFFEFE6),
                       borderRadius: BorderRadius.circular(12),
